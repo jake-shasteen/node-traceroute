@@ -4,21 +4,29 @@ const DESTINATION_IP = process.argv[2];
 const HEADER_LENGTH = 12;
 let found = false
 
+var socketLevel = raw.SocketLevel.IPPROTO_IP;
+var socketOption = raw.SocketOption.IP_TTL;
+
+const hops = 64
+let timeoutId
 let socket = raw.createSocket({
   protocol: raw.Protocol.ICMP
 });
 
 socket.on("close", function() {
+  clearTimeout(timeoutId)
   console.log("socket closed");
   process.exit(-1);
 });
 
 socket.on("error", function(error) {
+  clearTimeout(timeoutId)
   console.log("error: " + error.toString());
   process.exit(-1);
 });
 
-socket.on("message", function(buffer, source) {
+socket.on("message", (buffer, source) => {
+  clearTimeout(timeoutId)
   if(source === DESTINATION_IP){
     found = true
     const id = buffer.readUInt16BE(24)
@@ -27,17 +35,16 @@ socket.on("message", function(buffer, source) {
     return
   }
   // console.log("received " + buffer.toString('hex'));
-  // const sourceIp = buffer.readUInt32BE(12)
   const id = buffer.readUInt16BE(52)
+
   console.log(`${id}\t${source}`)
-  // sourceIp = buffer.slice(12,16)
-  // console.log('sourceip', intToIpv4(sourceIp))
+  timeoutId = sendICMP(id+1, hops)
   // console.timeEnd('hop:'+i)
 });
-var socketLevel = raw.SocketLevel.IPPROTO_IP;
-var socketOption = raw.SocketOption.IP_TTL;
 
-const sendICMP = (ttl) => {
+const sendICMP = (ttl, max) => {
+  if(ttl >= max) return
+
   let header = Buffer.alloc(HEADER_LENGTH);
   header.writeUInt8(0x8, 0); //type
   header.writeUInt16BE(ttl, 4); //id
@@ -48,17 +55,14 @@ const sendICMP = (ttl) => {
   }, function afterSend( error, bytes) {
     if (error) console.log(error.toString());
   });
+
+  return setTimeout(() => {
+    console.log(`${ttl}\t*`)
+    clearTimeout(timeoutId)
+    timeoutId = sendICMP(ttl+1)
+  }, 1500)
 }
 
 
-const hops = 64
-
-for(let i = 1; i < hops; i++){
-  console.time('hop:'+i)
-  setTimeout(() => {
-    if(!found){
-      sendICMP(i)
-    }
-  }, i*100)
-}
+timeoutId = sendICMP(1, hops)
 
