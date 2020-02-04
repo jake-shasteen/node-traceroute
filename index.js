@@ -1,5 +1,4 @@
 const raw = require("raw-socket");
-
 const DESTINATION_IP = process.argv[2];
 const HEADER_LENGTH = 12;
 let found = false
@@ -8,6 +7,7 @@ var socketLevel = raw.SocketLevel.IPPROTO_IP;
 var socketOption = raw.SocketOption.IP_TTL;
 
 const hops = 64
+const timers = {}
 let timeoutId
 let socket = raw.createSocket({
   protocol: raw.Protocol.ICMP
@@ -30,20 +30,23 @@ socket.on("message", (buffer, source) => {
   if(source === DESTINATION_IP){
     found = true
     const id = buffer.readUInt16BE(24)
-    console.log(`${id}\t${source}`)
+    const [seconds, nanoseconds] = process.hrtime(timers[id])
+    console.log(`${id}\t${source}\t${seconds}s ${nanoseconds/1000000}ms`)
     console.log("destination reached at hop", id);
     return
   }
   // console.log("received " + buffer.toString('hex'));
   const id = buffer.readUInt16BE(52)
 
-  console.log(`${id}\t${source}`)
+  const [seconds, nanoseconds] = process.hrtime(timers[id])
+  console.log(`${id}\t${source}\t${seconds}s ${nanoseconds/1000000}ms`)
   timeoutId = sendICMP(id+1, hops)
-  // console.timeEnd('hop:'+i)
 });
 
 const sendICMP = (ttl, max) => {
   if(ttl >= max) return
+
+  timers[ttl] = process.hrtime()
 
   let header = Buffer.alloc(HEADER_LENGTH);
   header.writeUInt8(0x8, 0); //type
