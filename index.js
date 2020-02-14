@@ -1,5 +1,9 @@
 const raw = require("raw-socket");
 const DESTINATION_IP = process.argv[2];
+if(!DESTINATION_IP){
+  throw new Error('Missing argument DESTINATION_IP')
+}
+
 const HEADER_LENGTH = 12;
 let found = false
 
@@ -33,7 +37,7 @@ socket.on("message", (buffer, source) => {
     const [seconds, nanoseconds] = process.hrtime(timers[id])
     console.log(`${id}\t${source}\t${seconds}s ${nanoseconds/1000000}ms`)
     console.log("destination reached at hop", id);
-    return
+    return process.exit(0)
   }
   // console.log("received " + buffer.toString('hex'));
   const id = buffer.readUInt16BE(52)
